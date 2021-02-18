@@ -235,3 +235,61 @@ def orthogonalize_polygon(polygon):
     # Recreate the original object
     polyOrthog = Polygon(polyOrthog[0].exterior, [inner.exterior for inner in polyOrthog[1:]])
     return polyOrthog
+
+
+#### Main Part
+
+import fiona
+import sys
+import numpy
+
+
+shpfile = fiona.open('/Buildigns_footprints_testing/geo_export_98ca6254-03aa-48e1-8931-a446a182959c.shp')
+args = sys.argv
+sliceNo = int(args[1])
+buildings = gpd.GeoDataFrame.from_features(shpfile[ sliceNo*50000 : (sliceNo+1)*50000 ])
+
+buildings.crs = "EPSG:4326"
+buildings.to_file('/Buildigns_footprints_testing/raw/BuildCT_raw_' + str(sliceNo) + '.geojson', driver='GeoJSON')
+
+buildings['geometry'] = buildings['geometry'].simplify(0.000005, preserve_topology=True)
+
+for i in range(0, len(buildings)):
+    build = buildings.loc[i, 'geometry']
+    if build.type == 'MultiPolygon':
+        multipolygon = []
+        # For multipolygons process all polygon rings one-by-one
+        for poly in build:
+            buildOrtho = orthogonalize_polygon(poly)
+            x = gpd.overlay(gpd.GeoDataFrame({'geometry':[buildOrtho]}, crs="EPSG:4326").loc[0:0], gpd.GeoDataFrame({'geometry':[poly]}, crs="EPSG:4326").loc[0:0], how='intersection')
+            if len(x) > 0:
+                buildings.loc[i, 'perc.change'] = round( x.loc[0, 'geometry'].area/buildings.loc[i, 'geometry'].area, 3)
+                if buildings.loc[i, 'perc.change'] < 0.95:
+                    orgAngle, corAngle, dirAngle = calculate_segment_angles(poly)
+                    if statistics.stdev(corAngle) > 9:
+                        multipolygon.append(poly)
+                        continue 
+            else:
+                multipolygon.append(poly)
+                continue
+            multipolygon.append(buildOrtho)
+        buildings.loc[i, 'geometry'] = gpd.GeoSeries(MultiPolygon(multipolygon)).values # Workaround for Pandas/Geopandas bug
+        # buildings.loc[i, 'geometry'] = MultiPolygon(multipolygon)   # Does not work
+    else:    
+        # Orthogonalize
+        buildOrtho = orthogonalize_polygon(build)
+        x = gpd.overlay(gpd.GeoDataFrame({'geometry':[buildOrtho]}, crs="EPSG:4326").loc[0:0], buildings.loc[i:i], how='intersection')
+        if len(x) > 0:
+            buildings.loc[i, 'perc.change'] = round( x.loc[0, 'geometry'].area/buildings.loc[i, 'geometry'].area, 3)
+            if buildings.loc[i, 'perc.change'] < 0.95:
+                orgAngle, corAngle, dirAngle = calculate_segment_angles(build)
+                if statistics.stdev(corAngle) > 9:
+                    continue       
+            buildings.loc[i, 'geometry'] = buildOrtho
+    
+
+buildings['geometry'] = buildings['geometry'].simplify(0.000001, preserve_topology=True)
+
+buildings.to_file('/Buildigns_footprints_testing/ortho/BuildCT_ortho_' + str(sliceNo) + '.geojson', driver='GeoJSON')
+
+
