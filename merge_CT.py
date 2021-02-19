@@ -140,7 +140,7 @@ completeGrid = completeGrid.drop(columns=['index'])
 # Create tags for URL
 for i in range(0, len(completeGrid)):
     completeGrid.loc[i:i, 'name'] = "Fragment_" + str(i+1)
-    completeGrid.loc[i:i, 'URL'] = "[myurl]" + completeGrid.loc[i]['name'] + ".geojson"
+    completeGrid.loc[i:i, 'URL'] = "https://storage.googleapis.com/ct-import-bucket/Parts/" + completeGrid.loc[i]['name'] + ".geojson"
 
 
 # Save grid
