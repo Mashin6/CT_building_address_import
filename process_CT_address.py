@@ -110,7 +110,6 @@ def expandSuffix(text):
     "Spg": "Springs",
     "Spgs": "Springs",
     "Sq": "Square",
-    "St": "Saint",
     "Sta": "Station",
     "Sw": "South West",
     "Trl": "Trail",
